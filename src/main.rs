@@ -173,7 +173,7 @@ define_class!(
         fn toggle_duration(&self, _sender: &AnyObject) { self.sync_controls(); }
         #[unsafe(method(preset:))]
         fn preset(&self, sender: &NSButton) {
-            if let Some(c) = self.ivars().controls.get() { c.seconds.setStringValue(&text(&sender.tag().to_string())); }
+            if let Some(c) = self.ivars().controls.get() { c.seconds.setStringValue(&text(&format!("{}:{:02}", sender.tag() / 60, sender.tag() % 60))); }
         }
         #[unsafe(method(record:))]
         fn record(&self, _sender: &AnyObject) {
@@ -529,17 +529,17 @@ impl Delegate {
         view.addSubview(&apps);
         let refresh = self.button(view, "Refresh", sel!(refresh:), rect(370., 407., 110., 32.));
         self.label(view, "DURATION", rect(44., 368., 120., 20.), true);
-        let seconds = NSTextField::textFieldWithString(&text("30"), mtm);
-        seconds.setFrame(rect(44., 335., 48., 26.));
+        let seconds = NSTextField::textFieldWithString(&text("0:30"), mtm);
+        seconds.setFrame(rect(44., 335., 82., 26.));
         view.addSubview(&seconds);
-        self.label(view, "sec", rect(99., 337., 30., 22.), true);
+        self.label(view, "m:ss", rect(134., 337., 40., 22.), true);
         let mut presets = vec![];
         for (i, value) in [10, 20, 30, 60].into_iter().enumerate() {
             let b = self.button(
                 view,
                 &format!("{value}s"),
                 sel!(preset:),
-                rect(139. + i as f64 * 59., 331., 55., 32.),
+                rect(190. + i as f64 * 66., 331., 62., 32.),
             );
             b.setTag(value);
             presets.push(b);
