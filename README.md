@@ -4,6 +4,27 @@ Capture audio.
 
 A small macOS desktop recorder for browser audio excerpts. Native AppKit controls written in Rust (system fonts, menus and keyboard shortcuts), direct Objective-C bindings to Apple's ScreenCaptureKit, and local WAV encoding (hound). No Swift bridge, browser extension, virtual audio driver, analytics, or application network requests. Cargo downloads open-source dependencies at build time; versions are pinned in Cargo.lock.
 
+## Status and installation
+
+Early-stage macOS application, currently distributed as source. Build locally
+with Rust and Apple's command line tools before opening the app:
+
+```sh
+git clone https://github.com/cvxtct/take.git
+cd take
+zsh build.sh
+open Take.app
+```
+
+Local builds are ad-hoc signed, not Developer ID signed or notarized. macOS may
+ask you to authorize screen/system-audio capture again after a rebuild. Quit
+and reopen the app after changing its permission. Keep one installed app copy
+to avoid ambiguous Spotlight results and permission entries. No need to disable
+macOS security protections.
+
+Browser/app audio capture is implemented. KO II USB audio input, clip renaming,
+and automatic key estimation are planned features, not currently available.
+
 ## Run
 
 Open **Take.app** in this folder.
@@ -54,6 +75,9 @@ Clippy on macOS for pull requests and pushes to `main`. See `AGENTS.md`.
 
 The macOS bundle identifier remains `local.muzik.browserrecorder` for continuity with existing installations. The build script migrates `Browser Recorder.app` to `Take.app`; recordings stay in the same folder.
 
+## License
+
+MIT — see [LICENSE](LICENSE). Third-party dependencies retain their own licenses.
 ## Security checks
 
 The Security workflow runs on pull requests, main pushes, and weekly to catch
@@ -61,8 +85,7 @@ new advisories even without code changes. Semgrep Community Edition scans Rust
 source with the community `p/rust` rules; cargo-deny checks Cargo.lock against
 RustSec. Findings fail their job. Results are available in Actions logs.
 Scans run on Linux with read-only repository permissions and no paid service
-account. Private-repository Actions usage still counts against the account's
-runner allowance. Semgrep fetches community rules, but scans on the runner with
+account. Semgrep fetches community rules, but scans on the runner with
 metrics disabled; source is not uploaded to the Semgrep service. The rules and
 advisory database are refreshed so new detections can appear over time.
 
