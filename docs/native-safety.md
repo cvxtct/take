@@ -42,3 +42,10 @@ This is a source-level review, not a formal proof or a substitute for testing
 capture on macOS. It relies on Apple and objc2 ownership/callback contracts.
 Changes to callback lifetimes, delegate retention, buffer formats or selectors
 require renewed review. Semgrep does not validate these contracts for us.
+
+## Executable path
+
+The current-exe rule also flags the default recording folder. This call only
+suggests an editable output path beside the app; it is not an identity or trust
+check and never loads or executes code. Files are created with create_new under
+the user's existing privileges. This one call has a rule-specific exception.

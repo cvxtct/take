@@ -30,6 +30,9 @@ fn rect(x: f64, y: f64, w: f64, h: f64) -> NSRect {
     NSRect::new(NSPoint::new(x, y), NSSize::new(w, h))
 }
 fn default_folder() -> PathBuf {
+    // REVIEW (#16): Only suggests the editable save folder; never used for trust,
+    // authorization, loading code, or relaunching. Files use create_new under user privileges.
+    // nosemgrep: rust.lang.security.current-exe.current-exe
     std::env::current_exe()
         .ok()
         .and_then(|p| {
