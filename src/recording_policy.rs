@@ -21,7 +21,7 @@ pub fn validate_duration(bundle: &str, duration: Option<u64>) -> Result<(), Stri
     if duration == Some(0) {
         return Err("Recording duration must be greater than zero.".into());
     }
-    if browser_limited(bundle) && !duration.is_some_and(|s| s <= 60) {
+    if browser_limited(bundle) && duration.is_none_or(|s| s > 60) {
         return Err("Browser recordings are limited to 1–60 seconds in this build.".into());
     }
     Ok(())
