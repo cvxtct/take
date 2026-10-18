@@ -256,7 +256,7 @@ define_class!(
                     if error.kind() == std::io::ErrorKind::AlreadyExists {
                         self.status("That filename already exists. Choose another name; no files were changed.");
                     } else {
-                        self.status(&format!("Could not rename: {error}. Original file was not renamed."));
+                        self.status(&format!("Could not rename: {error} Original file was not renamed."));
                     }
                 }
             }
@@ -509,7 +509,7 @@ impl Delegate {
         ));
         c.clip_count
             .setStringValue(&text(&format!("{} clips", state.clips.len())));
-        let height = (state.clips.len() as f64 * 46.).max(342.);
+        let height = (state.clips.len() as f64 * 46.).max(288.);
         c.clip_document.setFrame(rect(0., 0., 434., height));
         if state.clips.is_empty() {
             self.label(
@@ -646,7 +646,7 @@ impl Delegate {
         scroll.setDrawsBackground(false);
         scroll.setHasVerticalScroller(true);
         scroll.setAutohidesScrollers(true);
-        let clip_document = NSView::initWithFrame(NSView::alloc(mtm), rect(0., 0., 434., 342.));
+        let clip_document = NSView::initWithFrame(NSView::alloc(mtm), rect(0., 0., 434., 288.));
         scroll.setDocumentView(Some(&clip_document));
         view.addSubview(&scroll);
         self.label(view, "FILENAME", rect(544., 211., 320., 18.), true);
