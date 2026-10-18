@@ -11,6 +11,22 @@ Capture audio.
 
 A small macOS desktop recorder for browser audio excerpts. Native AppKit controls written in Rust (system fonts, menus and keyboard shortcuts), direct Objective-C bindings to Apple's ScreenCaptureKit, and local WAV encoding (hound). No Swift bridge, browser extension, virtual audio driver, analytics, or application network requests. Cargo downloads open-source dependencies at build time; versions are pinned in Cargo.lock.
 
+## Why Take exists
+
+Take began as a personal learning tool: capture short, roughly **10–60 second**
+excerpts to study rhythm, timing, and where sounds fall within a bar. The aim is
+to understand music and develop listening skills while supporting the people
+who make it, especially independent and underground artists.
+
+**Support the artists.** Record only audio you own or are permitted to capture,
+respecting applicable law and the source platform's terms. Do not use Take to
+avoid buying music or to redistribute recordings without permission. A short
+excerpt is not automatically permitted just because it is short.
+
+Take also supports longer recordings, including your own performances and
+other authorized material. That capability does not grant rights to the audio.
+See [Responsible use](docs/responsible-use.md) for guidance and current limits.
+
 ## Status and installation
 
 Early-stage macOS application, currently distributed as source. Build locally
