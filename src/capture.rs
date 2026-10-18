@@ -68,21 +68,29 @@ pub fn recording_duration(text: &str, until_stopped: bool) -> Result<Option<u64>
 fn should_stop(stop: bool, deadline: Option<Instant>, now: Instant) -> bool {
     stop || deadline.is_some_and(|deadline| now >= deadline)
 }
-fn ns_error(error: *mut NSError) -> Option<String> {
+unsafe fn ns_error(error: *mut NSError) -> Option<String> {
     // SAFETY: Apple supplies either a valid NSError for this callback or null.
+    // SAFETY (#16): Caller guarantees a live callback NSError or null; its description is copied before callback return.
+    // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
     unsafe { error.as_ref().map(|e| e.localizedDescription().to_string()) }
 }
 fn content() -> Result<Retained<SCShareableContent>, String> {
     let (tx, rx) = mpsc::channel();
     let block = RcBlock::new(move |value: *mut SCShareableContent, error: *mut NSError| {
-        let result = if let Some(e) = ns_error(error) {
+        // SAFETY (#16): ScreenCaptureKit supplies a valid NSError or null for the duration of this completion callback.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
+        let result = if let Some(e) = unsafe { ns_error(error) } {
             Err(e)
         } else {
             // Retain the immutable content snapshot before Apple's callback returns.
+            // SAFETY (#16): Apple callback object is live here; retain extends its lifetime beyond callback return and null becomes an error.
+            // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
             unsafe { Retained::retain(value) }.ok_or_else(|| "No capture sources returned.".into())
         };
         let _ = tx.send(result);
     });
+    // SAFETY (#16): ScreenCaptureKit copies the completion block; captured sender owns its state, so late completion after timeout is safe.
+    // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
     unsafe {
         SCShareableContent::getShareableContentExcludingDesktopWindows_onScreenWindowsOnly_completionHandler(false, false, &block);
     }
@@ -91,6 +99,8 @@ fn content() -> Result<Retained<SCShareableContent>, String> {
     })?
 }
 pub fn list_apps(tx: mpsc::Sender<Event>) {
+    // SAFETY (#16): Retained shareable snapshot owns the applications while immutable properties are copied into Rust values.
+    // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
     let result = content().map(|content| unsafe {
         let mut apps: Vec<_> = content
             .applications()
@@ -141,20 +151,32 @@ struct StereoBufferList {
     buffers: [AudioBuffer; 2],
 }
 
+fn supported_pcm_format(asbd: &AudioStreamBasicDescription) -> bool {
+    !(asbd.mFormatID != kAudioFormatLinearPCM
+        || asbd.mFormatFlags & kAudioFormatFlagIsFloat == 0
+        || asbd.mFormatFlags & kAudioFormatFlagIsBigEndian != 0
+        || asbd.mFormatFlags & kAudioFormatFlagIsPacked == 0
+        || asbd.mBytesPerFrame
+            != if asbd.mFormatFlags & kAudioFormatFlagIsNonInterleaved != 0 {
+                4
+            } else {
+                8
+            }
+        || asbd.mBitsPerChannel != 32
+        || asbd.mChannelsPerFrame != 2
+        || asbd.mSampleRate != 48000.)
+}
+
 // Copy Apple's PCM into owned memory; accept only the explicitly requested format.
 fn pcm(sample: &CMSampleBuffer) -> Result<Vec<f32>, String> {
+    // SAFETY (#16): Sample is borrowed only during its callback. Format and frame bounds are checked before copying into aligned, owned float buffers; no borrowed audio escapes.
+    // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
     unsafe {
         let desc = sample.format_description().ok_or("Missing audio format")?;
         let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(&desc)
             .as_ref()
             .ok_or("Missing PCM description")?;
-        if asbd.mFormatID != kAudioFormatLinearPCM
-            || asbd.mFormatFlags & kAudioFormatFlagIsFloat == 0
-            || asbd.mFormatFlags & kAudioFormatFlagIsBigEndian != 0
-            || asbd.mBitsPerChannel != 32
-            || asbd.mChannelsPerFrame != 2
-            || asbd.mSampleRate != 48000.
-        {
+        if !supported_pcm_format(asbd) {
             return Err("Unexpected capture format; expected 48 kHz stereo float PCM.".into());
         }
         let frames = sample.num_samples();
@@ -248,8 +270,12 @@ define_class!(
 fn wait_capture(stream: &SCStream, start: bool) -> Result<(), String> {
     let (tx, rx) = mpsc::channel();
     let block = RcBlock::new(move |error: *mut NSError| {
-        let _ = tx.send(ns_error(error));
+        // SAFETY (#16): Completion-handler NSError is valid until return; only its owned description crosses threads.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
+        let _ = tx.send(unsafe { ns_error(error) });
     });
+    // SAFETY (#16): Stream is retained by the caller; Apple copies the block whose sender remains valid even after the receiver times out.
+    // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
     unsafe {
         if start {
             stream.startCaptureWithCompletionHandler(Some(&block));
@@ -287,11 +313,17 @@ fn record_inner(
     tx: mpsc::Sender<Event>,
 ) -> Result<(PathBuf, String), String> {
     let content = content()?;
+    // SAFETY (#16): Retained content snapshot is live; returned applications array is retained.
+    // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
     let apps = unsafe { content.applications() };
     let app = apps
         .iter()
+        // SAFETY (#16): Each application is borrowed from the live retained array during iteration.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         .find(|a| unsafe { a.processID() } == pid)
         .ok_or("Selected app closed; refresh the list.")?;
+    // SAFETY (#16): Retained content snapshot is live; returned displays array is retained.
+    // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
     let displays = unsafe { content.displays() };
     let display = displays.firstObject().ok_or("No display available")?;
     if stop.load(Ordering::Relaxed) {
@@ -327,6 +359,8 @@ fn record_inner(
         last_meter: Instant::now(),
         tx: tx.clone(),
     }));
+    // SAFETY (#16): Retained filter/config/output/queue outlive stream use; callbacks own Arc state guarded by a mutex. No video output is registered.
+    // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
     let result = (|| unsafe {
         let output: Retained<AudioOutput> =
             msg_send![super(AudioOutput::alloc().set_ivars(state.clone())), init];
@@ -460,6 +494,33 @@ mod tests {
         ] {
             assert!(parse_duration(input).is_err());
         }
+    }
+    #[test]
+    fn pcm_layout_rejects_oversized_or_incompatible_frames() {
+        let mut format = AudioStreamBasicDescription {
+            mSampleRate: 48000.,
+            mFormatID: kAudioFormatLinearPCM,
+            mFormatFlags: kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked,
+            mBytesPerPacket: 8,
+            mFramesPerPacket: 1,
+            mBytesPerFrame: 8,
+            mChannelsPerFrame: 2,
+            mBitsPerChannel: 32,
+            mReserved: 0,
+        };
+        assert!(supported_pcm_format(&format));
+        format.mBytesPerFrame = 16;
+        assert!(!supported_pcm_format(&format));
+        format.mFormatFlags |= kAudioFormatFlagIsNonInterleaved;
+        format.mBytesPerFrame = 4;
+        assert!(supported_pcm_format(&format));
+        format.mBytesPerFrame = 8;
+        assert!(!supported_pcm_format(&format));
+        format.mBytesPerFrame = 4;
+        format.mFormatFlags &= !kAudioFormatFlagIsPacked;
+        assert!(!supported_pcm_format(&format));
+        format.mFormatFlags |= kAudioFormatFlagIsPacked | kAudioFormatFlagIsBigEndian;
+        assert!(!supported_pcm_format(&format));
     }
     #[test]
     fn stereo_channels_keep_order() {

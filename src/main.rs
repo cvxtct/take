@@ -388,6 +388,8 @@ impl Delegate {
         frame: NSRect,
     ) -> Retained<NSButton> {
         // Every target selector below is implemented by this main-thread delegate.
+        // SAFETY (#16): Selectors are private call sites using Delegate methods with one object argument; the main-thread delegate outlives its controls.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let button = unsafe {
             NSButton::buttonWithTitle_target_action(
                 &text(title),
@@ -479,6 +481,8 @@ impl Delegate {
         let app = NSApplication::sharedApplication(mtm);
         app.setActivationPolicy(NSApplicationActivationPolicy::Regular);
         self.build_menu(&app);
+        // SAFETY (#16): Constructed on the main thread; releasedWhenClosed(false) keeps ownership with Retained.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let window = unsafe {
             let w = NSWindow::initWithContentRect_styleMask_backing_defer(
                 NSWindow::alloc(mtm),
@@ -494,10 +498,14 @@ impl Delegate {
         };
         window.setTitle(&text("Take"));
         window.setAppearance(
+            // SAFETY (#16): AppKit exports this immutable process-lifetime appearance constant on supported macOS versions.
+            // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
             NSAppearance::appearanceNamed(unsafe { NSAppearanceNameDarkAqua }).as_deref(),
         );
         window.setBackgroundColor(Some(&ink(0.035, 0.043, 0.046)));
         window.setDelegate(Some(ProtocolObject::from_ref(self)));
+        // SAFETY (#16): Main-thread NSView superclass initializer matches NSRect ABI; initialized ivars precede init and result is retained.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let canvas: Retained<Canvas> = unsafe {
             msg_send![super(Canvas::alloc(mtm).set_ivars(CanvasState::default())), initWithFrame: rect(0.,0.,1020.,660.)]
         };
@@ -539,6 +547,8 @@ impl Delegate {
             b.setTag(value);
             presets.push(b);
         }
+        // SAFETY (#16): toggleDuration: is implemented by the retained main-thread Delegate with the expected sender argument.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let unlimited = unsafe {
             NSButton::checkboxWithTitle_target_action(
                 &text("Until I stop"),
@@ -625,6 +635,8 @@ impl Delegate {
         c.window.makeKeyAndOrderFront(None);
         #[allow(deprecated)]
         app.activateIgnoringOtherApps(true);
+        // SAFETY (#16): tick: accepts NSTimer; timer and delegate remain retained for the application lifetime on the main run loop.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let timer = unsafe {
             NSTimer::scheduledTimerWithTimeInterval_target_selector_userInfo_repeats(
                 0.1,
@@ -641,6 +653,8 @@ impl Delegate {
         let menu = NSMenu::new(mtm);
         let app_item = NSMenuItem::new(mtm);
         let app_menu = NSMenu::new(mtm);
+        // SAFETY (#16): terminate: is an AppKit responder-chain action with the standard sender signature.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let quit = unsafe {
             NSMenuItem::initWithTitle_action_keyEquivalent(
                 NSMenuItem::alloc(mtm),
@@ -662,6 +676,8 @@ impl Delegate {
             ("Paste", sel!(paste:), "v"),
             ("Select All", sel!(selectAll:), "a"),
         ] {
+            // SAFETY (#16): Only standard AppKit edit actions with a sender argument are installed in the responder chain.
+            // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
             let item = unsafe {
                 NSMenuItem::initWithTitle_action_keyEquivalent(
                     NSMenuItem::alloc(mtm),
@@ -680,6 +696,8 @@ impl Delegate {
 fn main() {
     let mtm = MainThreadMarker::new().expect("Run the app on the main thread");
     let app = NSApplication::sharedApplication(mtm);
+    // SAFETY (#16): NSObject init is called on an allocated main-thread Delegate with initialized ivars; retained through app.run().
+    // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
     let delegate: Retained<Delegate> = unsafe {
         msg_send![
             super(Delegate::alloc(mtm).set_ivars(Ivars::default())),
