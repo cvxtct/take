@@ -75,7 +75,11 @@ unsafe fn ns_error(error: *mut NSError) -> Option<String> {
     // SAFETY: Apple supplies either a valid NSError for this callback or null.
     // SAFETY (#16): Caller guarantees a live callback NSError or null; its description is copied before callback return.
     // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
-    unsafe { error.as_ref().map(|e| e.localizedDescription().to_string()) }
+    unsafe {
+        error
+            .as_ref()
+            .map(|e| format!("{} ({} {})", e.localizedDescription(), e.domain(), e.code()))
+    }
 }
 fn content() -> Result<Retained<SCShareableContent>, String> {
     let (tx, rx) = mpsc::channel();
