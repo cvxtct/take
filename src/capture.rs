@@ -86,7 +86,9 @@ fn content() -> Result<Retained<SCShareableContent>, String> {
     unsafe {
         SCShareableContent::getShareableContentExcludingDesktopWindows_onScreenWindowsOnly_completionHandler(false, false, &block);
     }
-    rx.recv_timeout(Duration::from_secs(60)).map_err(|_| "Capture permission timed out. Allow Browser Recorder in System Settings, then try again.".to_string())?
+    rx.recv_timeout(Duration::from_secs(60)).map_err(|_| {
+        "Capture permission timed out. Allow Take in System Settings, then try again.".to_string()
+    })?
 }
 pub fn list_apps(tx: mpsc::Sender<Event>) {
     let result = content().map(|content| unsafe {
