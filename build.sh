@@ -23,7 +23,7 @@ cat > "$app_bundle/Contents/Info.plist" <<'PLIST'
 <key>CFBundleShortVersionString</key><string>1.1</string>
 <key>LSMinimumSystemVersion</key><string>13.0</string>
 <key>NSHighResolutionCapable</key><true/>
-<key>NSScreenCaptureUsageDescription</key><string>Record audio from your selected browser into a local WAV file. No microphone or screen video is saved.</string>
+<key>NSScreenCaptureUsageDescription</key><string>Take needs screen-recording permission to list applications and capture audio from your selected app. No screen video or microphone audio is saved.</string>
 </dict></plist>
 PLIST
 xattr -d com.apple.FinderInfo "$app_bundle" 2>/dev/null || true

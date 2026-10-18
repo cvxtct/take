@@ -23,6 +23,19 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[link(name = "CoreGraphics", kind = "framework")]
+unsafe extern "C" {
+    fn CGPreflightScreenCaptureAccess() -> bool;
+    fn CGRequestScreenCaptureAccess() -> bool;
+}
+
+fn request_capture_permission(_main_thread: MainThreadMarker) -> bool {
+    // SAFETY: These macOS 10.15+ C functions take no pointers and return C bool.
+    // Called only from a user action on the main thread; macOS owns the permission dialog.
+    // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
+    unsafe { CGPreflightScreenCaptureAccess() || CGRequestScreenCaptureAccess() }
+}
+
 fn text(s: &str) -> Retained<NSString> {
     NSString::from_str(s)
 }
@@ -163,6 +176,12 @@ define_class!(
     impl Delegate {
         #[unsafe(method(refresh:))]
         fn refresh(&self, _sender: &AnyObject) {
+            if self.ivars().state.borrow().busy { return; }
+            // Do not hold a RefCell borrow while macOS presents its permission UI.
+            if !request_capture_permission(self.mtm()) {
+                self.status("Take needs Screen & System Audio Recording to list apps. Audio-only permission is insufficient. Allow Take in the macOS prompt, then quit and reopen it.");
+                return;
+            }
             let mut state = self.ivars().state.borrow_mut();
             if state.busy { return; }
             state.busy = true;

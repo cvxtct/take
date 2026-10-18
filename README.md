@@ -94,3 +94,10 @@ CLI version should be reviewed periodically. Existing Clippy and tests remain
 on macOS. These checks catch known patterns and dependency advisories, not all
 vulnerabilities: unsafe Rust, Objective-C FFI, permissions, and audio-buffer
 lifetimes still need manual review.
+
+If Take appears only under **System Audio Recording Only**, click **Refresh**
+in Take to explicitly request the screen-capture permission needed to enumerate
+apps. Audio-only authorization does not satisfy this listing operation. Approve
+the system prompt, then quit and reopen Take. The app does not reset permissions
+or change macOS security settings itself. Local ad-hoc signing still means a
+rebuild can require renewed authorization.
