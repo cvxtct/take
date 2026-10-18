@@ -1,6 +1,13 @@
 # Take
 
+[![Rust](https://img.shields.io/badge/Built_with-Rust-000000?logo=rust)](https://www.rust-lang.org/)
+[![Rust tests](https://github.com/cvxtct/take/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/cvxtct/take/actions/workflows/tests.yml)
+[![Security](https://github.com/cvxtct/take/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/cvxtct/take/actions/workflows/security.yml)
+[![Built with OpenAI Codex](https://img.shields.io/badge/Built_with-OpenAI_Codex-412991)](#credits)
+
 Capture audio.
+
+**Built with OpenAI Codex**, with concept, direction, and hands-on testing by [cvxtct](https://github.com/cvxtct). See [Credits](#credits).
 
 A small macOS desktop recorder for browser audio excerpts. Native AppKit controls written in Rust (system fonts, menus and keyboard shortcuts), direct Objective-C bindings to Apple's ScreenCaptureKit, and local WAV encoding (hound). No Swift bridge, browser extension, virtual audio driver, analytics, or application network requests. Cargo downloads open-source dependencies at build time; versions are pinned in Cargo.lock.
 
