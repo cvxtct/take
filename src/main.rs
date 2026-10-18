@@ -1,4 +1,5 @@
 mod capture;
+mod clips;
 
 use capture::{AppInfo, Event};
 use objc2::{
@@ -139,6 +140,8 @@ struct Controls {
     record: Retained<NSButton>,
     play: Retained<NSButton>,
     reveal: Retained<NSButton>,
+    filename: Retained<NSTextField>,
+    rename: Retained<NSButton>,
     status: Retained<NSTextField>,
     clock: Retained<NSTextField>,
     canvas: Retained<Canvas>,
@@ -234,6 +237,30 @@ define_class!(
             drop(state);
             self.render_clips(); self.sync_controls();
         }
+        #[unsafe(method(renameClip:))]
+        fn rename_clip(&self, _sender: &AnyObject) {
+            let c = self.ivars().controls.get().unwrap();
+            let source = {
+                let state = self.ivars().state.borrow();
+                if state.busy { return; }
+                state.saved.clone()
+            };
+            let Some(source) = source else { return; };
+            match clips::rename_clip(&source, &c.filename.stringValue().to_string()) {
+                Ok(path) => {
+                    self.status(&format!("Renamed to {}", path.file_name().unwrap_or_default().to_string_lossy()));
+                    self.ivars().state.borrow_mut().saved = Some(path);
+                    self.load_clips();
+                }
+                Err(error) => {
+                    if error.kind() == std::io::ErrorKind::AlreadyExists {
+                        self.status("That filename already exists. Choose another name; no files were changed.");
+                    } else {
+                        self.status(&format!("Could not rename: {error}. Original file was not renamed."));
+                    }
+                }
+            }
+        }
         #[unsafe(method(reloadClips:))]
         fn reload_clips(&self, _sender: &AnyObject) { self.load_clips(); }
         #[unsafe(method(tick:))]
@@ -288,6 +315,11 @@ impl Delegate {
             .setEnabled(state.recording || (!state.busy && !state.apps.is_empty()));
         c.play.setEnabled(state.saved.is_some() && !state.busy);
         c.reveal.setEnabled(state.saved.is_some() && !state.busy);
+        c.filename.setEnabled(state.saved.is_some() && !state.busy);
+        c.rename.setEnabled(state.saved.is_some() && !state.busy);
+        if state.saved.is_none() {
+            c.filename.setStringValue(&text(""));
+        }
     }
     fn poll(&self) {
         let Some(c) = self.ivars().controls.get() else {
@@ -435,7 +467,7 @@ impl Delegate {
             .filter(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("wav")))
             .collect();
         paths.sort_by_key(|p| std::cmp::Reverse(p.metadata().and_then(|m| m.modified()).ok()));
-        let clips = paths
+        let clips: Vec<Clip> = paths
             .into_iter()
             .map(|path| {
                 let duration = hound::WavReader::open(&path)
@@ -448,8 +480,18 @@ impl Delegate {
                 Clip { path, duration }
             })
             .collect();
-        self.ivars().state.borrow_mut().clips = clips;
+        {
+            let mut state = self.ivars().state.borrow_mut();
+            if !clips
+                .iter()
+                .any(|clip| Some(&clip.path) == state.saved.as_ref())
+            {
+                state.saved = None;
+            }
+            state.clips = clips;
+        }
         self.render_clips();
+        self.sync_controls();
     }
     fn render_clips(&self) {
         let c = self.ivars().controls.get().unwrap();
@@ -457,6 +499,14 @@ impl Delegate {
             view.removeFromSuperview();
         }
         let state = self.ivars().state.borrow();
+        c.filename.setStringValue(&text(
+            &state
+                .saved
+                .as_ref()
+                .and_then(|p| p.file_stem())
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+        ));
         c.clip_count
             .setStringValue(&text(&format!("{} clips", state.clips.len())));
         let height = (state.clips.len() as f64 * 46.).max(342.);
@@ -592,13 +642,24 @@ impl Delegate {
         heading.setFont(Some(&NSFont::systemFontOfSize(23.)));
         let clip_count = self.label(view, "0 clips", rect(890., 542., 90., 24.), true);
         let scroll =
-            NSScrollView::initWithFrame(NSScrollView::alloc(mtm), rect(538., 182., 440., 342.));
+            NSScrollView::initWithFrame(NSScrollView::alloc(mtm), rect(538., 236., 440., 288.));
         scroll.setDrawsBackground(false);
         scroll.setHasVerticalScroller(true);
         scroll.setAutohidesScrollers(true);
         let clip_document = NSView::initWithFrame(NSView::alloc(mtm), rect(0., 0., 434., 342.));
         scroll.setDocumentView(Some(&clip_document));
         view.addSubview(&scroll);
+        self.label(view, "FILENAME", rect(544., 211., 320., 18.), true);
+        let filename = NSTextField::textFieldWithString(&text(""), mtm);
+        filename.setPlaceholderString(Some(&text("Select a clip to rename")));
+        filename.setFrame(rect(544., 178., 320., 28.));
+        view.addSubview(&filename);
+        let rename = self.button(
+            view,
+            "Rename",
+            sel!(renameClip:),
+            rect(874., 175., 104., 34.),
+        );
         let play = self.button(view, "Play", sel!(play:), rect(536., 124., 100., 34.));
         let reveal = self.button(
             view,
@@ -614,7 +675,7 @@ impl Delegate {
         );
         self.label(
             view,
-            "Select a clip to play or reveal its file.",
+            "Select a clip to rename, play, or reveal. .wav is kept.",
             rect(544., 97., 420., 20.),
             true,
         );
@@ -643,6 +704,8 @@ impl Delegate {
                 record,
                 play,
                 reveal,
+                filename,
+                rename,
                 status,
                 clock,
                 canvas,

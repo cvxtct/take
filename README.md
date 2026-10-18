@@ -29,7 +29,7 @@ and reopen the app after changing its permission. Keep one installed app copy
 to avoid ambiguous Spotlight results and permission entries. No need to disable
 macOS security protections.
 
-Browser/app audio capture is implemented. KO II USB audio input, clip renaming,
+Browser/app audio capture is implemented. KO II USB audio input
 and automatic key estimation are planned features, not currently available.
 
 ## Run
@@ -44,6 +44,10 @@ Open **Take.app** in this folder.
 4. Set a duration as minutes:seconds (e.g. `7:55`) or whole seconds (e.g. `475`), from `0:01` to `60:00`, or enable **Until I stop** to record without a timer. Choose a save folder. Default: `recordings` beside the app.
 5. Click **Record**, then play the excerpt. An elapsed timer and live level history show progress.
 6. Timed mode stops automatically. In manual mode, click **Stop & save** when finished; the display shows elapsed time. Use **Play** or **Show in Finder** to review the WAV.
+
+To rename a saved recording, select it in **Clips**, edit **Filename**, and click
+**Rename**. The `.wav` extension is kept automatically. Existing files are never
+overwritten, and renaming is disabled during recording and saving.
 
 Manual mode has no time limit, but a single WAV is saved automatically at the RIFF file size limit (about 6 hours at this format) to avoid corrupting the file.
 
