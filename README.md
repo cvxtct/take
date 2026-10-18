@@ -27,6 +27,8 @@ and automatic key estimation are planned features, not currently available.
 
 ## Run
 
+![Take showing the audio source, minute:second duration, level history, and a saved recording in the Clips panel](docs/images/take.png)
+
 Open **Take.app** in this folder.
 
 1. Open the browser and music you want to record.
