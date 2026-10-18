@@ -29,17 +29,18 @@ and reopen the app after changing its permission. Keep one installed app copy
 to avoid ambiguous Spotlight results and permission entries. No need to disable
 macOS security protections.
 
-Browser/app audio capture is implemented. KO II USB audio input
-and automatic key estimation are planned features, not currently available.
+Browser/app audio capture and renaming saved clips are available. KO II USB
+audio input and automatic key estimation are planned features, not currently
+available.
 
 ## Run
 
-![Take showing the audio source, minute:second duration, level history, and a saved recording in the Clips panel](docs/images/take.png)
+![Take showing recorded clips and the Filename field and Rename button in the Clips panel](docs/images/take.png)
 
 Open **Take.app** in this folder.
 
 1. Open the browser and music you want to record.
-2. Click **Refresh apps**. Allow capture when macOS requests it. If needed, enable Take in System Settings → Privacy & Security → Screen & System Audio Recording, then quit and reopen the app.
+2. Click **Refresh**. Allow capture when macOS requests it. If needed, enable Take in System Settings → Privacy & Security → Screen & System Audio Recording, then quit and reopen the app.
 3. Select your browser. Capture is application-wide: pause other tabs in that browser.
 4. Set a duration as minutes:seconds (e.g. `7:55`) or whole seconds (e.g. `475`), from `0:01` to `60:00`, or enable **Until I stop** to record without a timer. Choose a save folder. Default: `recordings` beside the app.
 5. Click **Record**, then play the excerpt. An elapsed timer and live level history show progress.
@@ -73,7 +74,7 @@ Live acceptance check (requires user-approved macOS capture permission): record 
 
 ## Recorder interface
 
-Dark two-panel AppKit interface with an elapsed timer, live peak-level history, duration presets, and a scrollable WAV recordings library. Select a clip, then use Play or Show in Finder. Reload scans the save folder again. The live display shows recent signal levels, not a sample-accurate waveform.
+Dark two-panel AppKit interface with an elapsed timer, live peak-level history, duration presets, and a scrollable WAV recordings library. Select a clip to edit its filename and click **Rename**, or use **Play** and **Show in Finder**. Reload scans the save folder again. The live display shows recent signal levels, not a sample-accurate waveform.
 
 ## Contributing
 
