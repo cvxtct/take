@@ -34,11 +34,27 @@ pub enum Event {
     Error(String),
 }
 pub fn parse_duration(text: &str) -> Result<u64, String> {
-    text.trim()
-        .parse::<u64>()
-        .ok()
-        .filter(|n| (1..=3600).contains(n))
-        .ok_or_else(|| "Enter a duration from 1 to 3600 whole seconds.".into())
+    let input = text.trim();
+    let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+    let duration = if let Some((minutes, seconds)) = input.split_once(':') {
+        if digits(minutes) && seconds.len() == 2 && digits(seconds) {
+            minutes.parse::<u64>().ok().and_then(|m| {
+                seconds
+                    .parse::<u64>()
+                    .ok()
+                    .filter(|s| *s < 60)
+                    .and_then(|s| m.checked_mul(60)?.checked_add(s))
+            })
+        } else {
+            None
+        }
+    } else if digits(input) {
+        input.parse::<u64>().ok()
+    } else {
+        None
+    };
+    duration.filter(|n| (1..=3600).contains(n)).ok_or_else(||
+        "Enter minutes:seconds (e.g. 7:55) or whole seconds, from 0:01 to 60:00. Use two seconds digits, 00–59.".into())
 }
 // Leave room for WAV headers below the RIFF 32-bit size limit.
 const WAV_MAX_FRAMES: u64 = (u32::MAX as u64 - 1024) / 4;
@@ -400,15 +416,46 @@ mod tests {
     #[test]
     fn timed_recording_stops_at_deadline_or_manually() {
         let now = Instant::now();
-        let deadline = Some(now + Duration::from_secs(60));
+        let duration = recording_duration("1:00", false).unwrap().unwrap();
+        let deadline = Some(now + Duration::from_secs(duration));
         assert!(!should_stop(false, deadline, now));
         assert!(should_stop(true, deadline, now));
         assert!(should_stop(false, deadline, now + Duration::from_secs(60)));
     }
     #[test]
     fn duration_validation() {
-        assert_eq!(parse_duration(" 30 ").unwrap(), 30);
-        for input in ["0", "3601", "-1", "1.5", "abc", ""] {
+        for (input, expected) in [
+            (" 30 ", 30),
+            ("475", 475),
+            ("7:55", 475),
+            ("07:55", 475),
+            (" 0:30 ", 30),
+            ("0:01", 1),
+            ("59:59", 3599),
+            ("60:00", 3600),
+            ("3600", 3600),
+        ] {
+            assert_eq!(parse_duration(input).unwrap(), expected, "{input}");
+        }
+        for input in [
+            "0",
+            "3601",
+            "-1",
+            "1.5",
+            "abc",
+            "",
+            "0:00",
+            "60:01",
+            "1:60",
+            "1:5",
+            ":30",
+            "1:",
+            "1:02:03",
+            "1: 30",
+            "+1:00",
+            "18446744073709551615:59",
+            "18446744073709551616",
+        ] {
             assert!(parse_duration(input).is_err());
         }
     }

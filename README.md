@@ -9,7 +9,7 @@ Open **Browser Recorder.app** in this folder.
 1. Open the browser and music you want to record.
 2. Click **Refresh apps**. Allow capture when macOS requests it. If needed, enable Browser Recorder in System Settings → Privacy & Security → Screen & System Audio Recording, then quit and reopen the app.
 3. Select your browser. Capture is application-wide: pause other tabs in that browser.
-4. Set a duration (1–3600 whole seconds), or enable **Until I stop** to record without a timer. Choose a save folder. Default: `recordings` beside the app.
+4. Set a duration as minutes:seconds (e.g. `7:55`) or whole seconds (e.g. `475`), from `0:01` to `60:00`, or enable **Until I stop** to record without a timer. Choose a save folder. Default: `recordings` beside the app.
 5. Click **Record**, then play the excerpt. An elapsed timer and live level history show progress.
 6. Timed mode stops automatically. In manual mode, click **Stop & save** when finished; the display shows elapsed time. Use **Play** or **Show in Finder** to review the WAV.
 
