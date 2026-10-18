@@ -53,3 +53,21 @@ Clippy on macOS for pull requests and pushes to `main`. See `AGENTS.md`.
 - **OpenAI Codex (AI coding assistant)** — implementation, native macOS UI development, automated tests, and development tooling, guided and reviewed by cvxtct.
 
 The macOS bundle identifier remains `local.muzik.browserrecorder` for continuity with existing installations. The build script migrates `Browser Recorder.app` to `Take.app`; recordings stay in the same folder.
+
+## Security checks
+
+The Security workflow runs on pull requests, main pushes, and weekly to catch
+new advisories even without code changes. Semgrep Community Edition scans Rust
+source with the community `p/rust` rules; cargo-deny checks Cargo.lock against
+RustSec. Findings fail their job. Results are available in Actions logs.
+Scans run on Linux with read-only repository permissions and no paid service
+account. Private-repository Actions usage still counts against the account's
+runner allowance. Semgrep fetches community rules, but scans on the runner with
+metrics disabled; source is not uploaded to the Semgrep service. The rules and
+advisory database are refreshed so new detections can appear over time.
+
+Dependabot proposes weekly Cargo and GitHub Actions updates. Semgrep's pinned
+CLI version should be reviewed periodically. Existing Clippy and tests remain
+on macOS. These checks catch known patterns and dependency advisories, not all
+vulnerabilities: unsafe Rust, Objective-C FFI, permissions, and audio-buffer
+lifetimes still need manual review.
