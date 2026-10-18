@@ -30,3 +30,6 @@ rustc-ice-*.txt
 /.cargo-home/
 .DS_Store
 *.app.zip
+
+# Owner-specific build choice (read only by build.sh --local)
+/.take-build-mode

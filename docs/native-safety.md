@@ -58,3 +58,15 @@ atomically; no check-then-overwrite fallback is used. CString storage remains
 alive throughout the synchronous C call, and OS errors are returned to the UI.
 Names cannot contain path separators or control characters. Source files must
 be regular files; directories and symlinks are rejected before the operation.
+
+## Source policy (issue #31)
+
+Capture reads the selected application's immutable bundle identifier from its
+retained ScreenCaptureKit snapshot before creating a WAV. The same pure policy
+used by the UI validates the request again in the capture worker. The source
+popup's selectSource: target is the retained main-thread Delegate.
+
+CaptureLimits bounds both timed and manual PCM writes to the RIFF ceiling.
+Duration-to-frame arithmetic saturates before applying that ceiling. Elapsed
+time is compared to the requested duration without constructing a potentially
+overflowing Instant deadline. No permission reset is performed by this feature.

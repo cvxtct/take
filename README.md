@@ -35,7 +35,7 @@ with Rust and Apple's command line tools before opening the app:
 ```sh
 git clone https://github.com/cvxtct/take.git
 cd take
-zsh build.sh
+zsh build.sh --public
 open Take.app
 ```
 
@@ -58,7 +58,7 @@ Open **Take.app** in this folder.
 1. Open the browser and music you want to record.
 2. Click **Refresh**. Allow capture when macOS requests it. If needed, enable Take in System Settings → Privacy & Security → Screen & System Audio Recording, then quit and reopen the app.
 3. Select your browser. Capture is application-wide: pause other tabs in that browser.
-4. Set a duration as minutes:seconds (e.g. `7:55`) or whole seconds (e.g. `475`), from `0:01` to `60:00`, or enable **Until I stop** to record without a timer. Choose a save folder. Default: `recordings` beside the app.
+4. Set a duration as minutes:seconds (e.g. `0:30`) or whole seconds (e.g. `30`). Public builds allow **1–60 seconds for recognized browsers** and hide **Until I stop** for those sources. Other apps and extended builds allow longer positive durations or **Until I stop**. Choose a save folder. Default: `recordings` beside the app.
 5. Click **Record**, then play the excerpt. An elapsed timer and live level history show progress.
 6. Timed mode stops automatically. In manual mode, click **Stop & save** when finished; the display shows elapsed time. Use **Play** or **Show in Finder** to review the WAV.
 
@@ -66,7 +66,7 @@ To rename a saved recording, select it in **Clips**, edit **Filename**, and clic
 **Rename**. The `.wav` extension is kept automatically. Existing files are never
 overwritten, and renaming is disabled during recording and saving.
 
-Manual mode has no time limit, but a single WAV is saved automatically at the RIFF file size limit (about 6 hours at this format) to avoid corrupting the file.
+All modes save automatically at the RIFF file-size limit (about 6 hours at this format) to avoid corrupting the file. Longer timed values do not bypass that limit. You can start another clip immediately.
 
 Output: lossless, stereo, 48 kHz, 16-bit WAV (about 5.8 MB for 30 seconds). Files have unique timestamp names; existing files are never overwritten. Silent captures are reported. Failed captures are removed instead of being presented as complete. Closing the window during recording requests stop and save first.
 
@@ -79,7 +79,7 @@ Requires macOS 13+, Rust and Apple's command line tools.
 ```sh
 cargo test --locked
 cargo clippy --locked -- -D warnings
-zsh build.sh
+zsh build.sh --public
 open "Take.app"
 ```
 
@@ -87,6 +87,51 @@ open "Take.app"
 `src/capture.rs`: app enumeration, capture, PCM conversion, WAV output and tests.
 
 Live acceptance check (requires user-approved macOS capture permission): record 10 seconds from a browser playing audio; verify the waveform meter, resulting file's audio and approximate duration. Check Stop & save with a longer duration and try a silent source. The unit tests check duration validation, stereo channel ordering and PCM conversion.
+
+## Recording builds
+
+| Source | Public build (default) | Extended build |
+| --- | --- | --- |
+| Recognized browser | 1–60 seconds, timed only | Positive timed duration or manual |
+| Other application | Positive timed duration or manual | Same |
+
+Unrestricted sources have no artificial duration cap; seconds and minutes:seconds
+must fit an unsigned 64-bit integer. All recordings retain the WAV size ceiling.
+Future USB input will follow the non-browser policy; it is not implemented yet.
+
+`zsh build.sh` and `zsh build.sh --public` always build the public policy, even
+when a local setting exists. For an extended local build:
+
+```sh
+printf 'extended\n' > .take-build-mode
+zsh build.sh --local
+```
+
+`.take-build-mode` is ignored by Git and is read as data, not executed. Missing or
+invalid local settings fail the build. Both modes replace the same `Take.app`
+and keep its bundle identifier. Extended builds show **Extended recording** in
+the header. Use `zsh build.sh --print-mode --local` to inspect the local choice.
+Public release packaging must use `zsh build.sh --public`.
+
+CI tests and lints both Cargo configurations (`--no-default-features`, with
+`--features extended-recording` for extended). The setting is not a secret or
+machine lock: anyone can build modified source or copy an extended binary.
+
+Recognized bundle identifiers are maintained in `src/recording_policy.rs`:
+
+| Browser | Bundle identifier |
+| --- | --- |
+| Safari | `com.apple.Safari` |
+| Chrome | `com.google.Chrome` |
+| Firefox | `org.mozilla.firefox` |
+| Edge | `com.microsoft.edgemac` |
+| Arc | `company.thebrowser.Browser` |
+| Brave | `com.brave.Browser` |
+
+Other identifiers, including unlisted browser variants, are not limited. No
+URLs or browsing history are inspected. Old builds are not retroactively
+restricted, and a 60-second limit does not establish permission to copy audio.
+See [Responsible use](docs/responsible-use.md).
 
 ## Recorder interface
 

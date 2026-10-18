@@ -11,6 +11,9 @@ permissions:
 
 jobs:
   test:
+    strategy:
+      matrix:
+        mode: [public, extended]
     runs-on: macos-latest
     timeout-minutes: 15
     steps:
@@ -21,7 +24,15 @@ jobs:
           rustup default stable
       - name: Check formatting
         run: cargo fmt --all -- --check
-      - name: Run tests
-        run: cargo test --locked
-      - name: Check lints
-        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Check build mode selection
+        run: zsh scripts/test-build-mode.sh
+      - name: Test and lint selected mode
+        env:
+          BUILD_MODE: ${{ matrix.mode }}
+        run: |
+          flags=(--locked --no-default-features)
+          if [[ "$BUILD_MODE" == extended ]]; then
+            flags+=(--features extended-recording)
+          fi
+          cargo test "${flags[@]}"
+          cargo clippy "${flags[@]}" --all-targets -- -D warnings

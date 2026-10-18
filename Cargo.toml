@@ -6,6 +6,10 @@ license = "MIT"
 repository = "https://github.com/cvxtct/take"
 description = "A local macOS audio recorder with a native AppKit interface"
 
+[features]
+default = []
+extended-recording = []
+
 [dependencies]
 objc2 = "0.6"
 objc2-foundation = "0.3"

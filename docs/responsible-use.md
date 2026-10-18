@@ -38,11 +38,19 @@ recording. Checking the foreground tab alone would not identify all captured
 audio. A blocklist would still not determine whether a user has permission or
 prevent all misuse; this open-source program can also be modified.
 
-Short duration presets support the original learning use case. Timed recording
-currently allows up to 60 minutes, and manual recording continues until stopped
-or the WAV size limit is reached. Longer recording is a capability, not a
-statement about what the user is allowed to record. No duration limit alone
-can establish permission or guarantee that copying will not be misused.
+Public builds limit recognized browsers to timed clips of 1–60 seconds; manual
+mode is unavailable for those sources. Other applications and extended local
+builds allow longer timed or manual recordings. All modes stop safely at the
+WAV file-size limit. There is no cooldown, cumulative quota, or tracking.
+
+Browser recognition uses the bundle identifiers listed in the README, not URLs.
+Unknown browsers, other playback apps, modified source, copied extended binaries,
+and older versions can bypass or lack this limit. It is a product guardrail,
+not DRM or a guarantee against misuse. The extended build is not machine-locked.
+
+Longer recording is a capability, not permission to record. A 60-second limit
+likewise does not establish legal permission. Future USB input will follow the
+non-browser policy.
 
 ## References
 

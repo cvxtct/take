@@ -1,7 +1,41 @@
 #!/bin/zsh
 set -euo pipefail
 cd "$(dirname "$0")"
-cargo build --locked --release
+# Ordinary builds are always public. Only --local reads the ignored setting.
+build_mode=public
+mode_option=""
+print_mode=false
+for option in "$@"; do
+  case "$option" in
+    --print-mode) print_mode=true ;;
+    --public|--local)
+      if [[ -n "$mode_option" ]]; then
+        echo "Choose only one of --public or --local." >&2; exit 1
+      fi
+      mode_option="$option" ;;
+    *) echo "Usage: zsh build.sh [--public|--local] [--print-mode]" >&2; exit 1 ;;
+  esac
+done
+if [[ "$mode_option" == --local ]]; then
+  if [[ ! -f .take-build-mode ]]; then
+    echo "Create .take-build-mode containing public or extended before using --local." >&2; exit 1
+  fi
+  build_mode=$(<.take-build-mode)
+  case "$build_mode" in
+    public|extended) ;;
+    *) echo "Invalid .take-build-mode: expected public or extended." >&2; exit 1 ;;
+  esac
+fi
+if $print_mode; then
+  echo "$build_mode"
+  exit 0
+fi
+build_options=(--locked --release --no-default-features)
+if [[ "$build_mode" == extended ]]; then
+  build_options+=(--features extended-recording)
+fi
+echo "Building Take: $build_mode recording policy"
+cargo build "${build_options[@]}"
 app_bundle="$PWD/Take.app"
 legacy_bundle="$PWD/Browser Recorder.app"
 # Migrate the existing installation instead of leaving a second launchable app.
@@ -29,4 +63,4 @@ PLIST
 xattr -d com.apple.FinderInfo "$app_bundle" 2>/dev/null || true
 codesign --force --sign - "$app_bundle"
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$app_bundle"
-echo "Built: $app_bundle"
+echo "Built: $app_bundle ($build_mode recording policy)"
