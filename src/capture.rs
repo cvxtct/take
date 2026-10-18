@@ -1,3 +1,4 @@
+use crate::recording_policy::{self, CaptureLimits, WAV_MAX_FRAMES};
 use block2::RcBlock;
 use dispatch2::DispatchQueue;
 use objc2::{
@@ -25,10 +26,11 @@ pub struct AppInfo {
     pub pid: i32,
     pub name: String,
     pub browser: bool,
+    pub bundle: String,
 }
 pub enum Event {
     Apps(Vec<AppInfo>),
-    Started(Option<u64>),
+    Started,
     Level(f32),
     Saved(PathBuf, String),
     Error(String),
@@ -53,20 +55,21 @@ pub fn parse_duration(text: &str) -> Result<u64, String> {
     } else {
         None
     };
-    duration.filter(|n| (1..=3600).contains(n)).ok_or_else(||
-        "Enter minutes:seconds (e.g. 7:55) or whole seconds, from 0:01 to 60:00. Use two seconds digits, 00–59.".into())
+    duration.filter(|n| *n > 0).ok_or_else(||
+        "Enter a positive duration in minutes:seconds (e.g. 7:55) or whole seconds. Use two seconds digits, 00–59; the value must fit a 64-bit unsigned integer.".into())
 }
-// Leave room for WAV headers below the RIFF 32-bit size limit.
-const WAV_MAX_FRAMES: u64 = (u32::MAX as u64 - 1024) / 4;
-pub fn recording_duration(text: &str, until_stopped: bool) -> Result<Option<u64>, String> {
-    if until_stopped {
-        Ok(None)
+pub fn recording_duration(
+    bundle: &str,
+    text: &str,
+    until_stopped: bool,
+) -> Result<Option<u64>, String> {
+    let duration = if until_stopped {
+        None
     } else {
-        parse_duration(text).map(Some)
-    }
-}
-fn should_stop(stop: bool, deadline: Option<Instant>, now: Instant) -> bool {
-    stop || deadline.is_some_and(|deadline| now >= deadline)
+        Some(parse_duration(text)?)
+    };
+    recording_policy::validate_duration(bundle, duration)?;
+    Ok(duration)
 }
 unsafe fn ns_error(error: *mut NSError) -> Option<String> {
     // SAFETY: Apple supplies either a valid NSError for this callback or null.
@@ -115,15 +118,8 @@ pub fn list_apps(tx: mpsc::Sender<Event>) {
                 Some(AppInfo {
                     pid,
                     name,
-                    browser: [
-                        "com.apple.Safari",
-                        "com.google.Chrome",
-                        "org.mozilla.firefox",
-                        "com.microsoft.edgemac",
-                        "company.thebrowser.Browser",
-                        "com.brave.Browser",
-                    ]
-                    .contains(&bundle.as_str()),
+                    browser: recording_policy::is_browser(&bundle),
+                    bundle,
                 })
             })
             .collect();
@@ -139,7 +135,7 @@ type Writer = hound::WavWriter<BufWriter<File>>;
 struct AudioState {
     writer: Option<Writer>,
     frames: u64,
-    max_frames: u64,
+    limits: CaptureLimits,
     peak: f32,
     error: Option<String>,
     last_meter: Instant,
@@ -239,11 +235,11 @@ define_class!(
         unsafe fn output(&self, _stream: &SCStream, sample: &CMSampleBuffer, kind: SCStreamOutputType) {
             if kind != SCStreamOutputType::Audio { return; }
             let Ok(mut state) = self.ivars().lock() else { return; };
-            if state.writer.is_none() || state.error.is_some() || state.frames >= state.max_frames { return; }
+            if state.writer.is_none() || state.error.is_some() || state.frames >= state.limits.max_frames { return; }
             match pcm(sample) {
                 Err(e) => state.error = Some(e),
                 Ok(samples) => {
-                    let count = samples.len().min(((state.max_frames-state.frames)*2) as usize);
+                    let count = state.limits.samples_to_write(state.frames, samples.len());
                     let mut peak = 0f32;
                     for &sample in &samples[..count] {
                         peak = peak.max(sample.abs());
@@ -322,6 +318,11 @@ fn record_inner(
         // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         .find(|a| unsafe { a.processID() } == pid)
         .ok_or("Selected app closed; refresh the list.")?;
+    // SAFETY (#31): app is retained by the live shareable-content snapshot;
+    // copy its immutable bundle identifier before starting capture.
+    // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
+    let bundle = unsafe { app.bundleIdentifier().to_string() };
+    let limits = CaptureLimits::new(&bundle, duration)?;
     // SAFETY (#16): Retained content snapshot is live; returned displays array is retained.
     // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
     let displays = unsafe { content.displays() };
@@ -353,7 +354,7 @@ fn record_inner(
     let state = Arc::new(Mutex::new(AudioState {
         writer: Some(writer),
         frames: 0,
-        max_frames: duration.map_or(WAV_MAX_FRAMES, |seconds| seconds * 48000),
+        limits,
         peak: 0.,
         error: None,
         last_meter: Instant::now(),
@@ -395,12 +396,17 @@ fn record_inner(
             let _ = wait_capture(&stream, false);
             return Err(error);
         }
-        let _ = tx.send(Event::Started(duration));
-        let deadline = duration.map(|seconds| Instant::now() + Duration::from_secs(seconds));
-        while !should_stop(stop.load(Ordering::Relaxed), deadline, Instant::now()) {
+        let _ = tx.send(Event::Started);
+        let started = Instant::now();
+        loop {
             let finished = {
                 let state = state.lock().unwrap();
-                state.error.is_some() || state.frames >= state.max_frames
+                state.error.is_some()
+                    || state.limits.should_stop(
+                        stop.load(Ordering::Relaxed),
+                        started.elapsed(),
+                        state.frames,
+                    )
             };
             if finished {
                 break;
@@ -428,7 +434,7 @@ fn record_inner(
         let _ = std::fs::remove_file(&path);
         return Err("No audio received. Play sound in the selected browser and try again.".into());
     }
-    let warning = if duration.is_none() && state.frames >= WAV_MAX_FRAMES {
+    let warning = if state.frames >= WAV_MAX_FRAMES {
         " — saved at the WAV file size limit (about 6 hours); start a new recording to continue."
     } else if state.peak < 0.0001 {
         " — audio was silent; check the source/tab."
@@ -441,22 +447,27 @@ fn record_inner(
 mod tests {
     use super::*;
     #[test]
-    fn manual_recording_ignores_timer_and_stops_on_request() {
-        assert_eq!(recording_duration("invalid", true).unwrap(), None);
-        let later = Instant::now() + Duration::from_secs(7200);
-        assert!(!should_stop(false, None, later));
-        assert!(should_stop(true, None, later));
-        assert!(recording_duration("invalid", false).is_err());
-        assert_eq!(recording_duration("60", false).unwrap(), Some(60));
-    }
-    #[test]
-    fn timed_recording_stops_at_deadline_or_manually() {
-        let now = Instant::now();
-        let duration = recording_duration("1:00", false).unwrap().unwrap();
-        let deadline = Some(now + Duration::from_secs(duration));
-        assert!(!should_stop(false, deadline, now));
-        assert!(should_stop(true, deadline, now));
-        assert!(should_stop(false, deadline, now + Duration::from_secs(60)));
+    fn duration_request_rechecks_policy_when_source_changes() {
+        let daw = "com.example.DAW";
+        let browser = "com.apple.Safari";
+        assert_eq!(recording_duration(daw, "invalid", true).unwrap(), None);
+        assert!(recording_duration(daw, "invalid", false).is_err());
+        assert_eq!(recording_duration(daw, "3601", false).unwrap(), Some(3601));
+        assert_eq!(
+            recording_duration(browser, "3601", false).is_ok(),
+            recording_policy::EXTENDED_RECORDING
+        );
+        assert_eq!(
+            recording_duration(browser, "30", true).is_ok(),
+            recording_policy::EXTENDED_RECORDING
+        );
+        assert_eq!(
+            recording_duration(browser, "1:00", false).unwrap(),
+            Some(60)
+        );
+        assert!(recording_duration(browser, "invalid", false).is_err());
+        assert!(recording_duration(browser, "0", false).is_err());
+        assert!(recording_duration(daw, "3601", false).is_ok());
     }
     #[test]
     fn duration_validation() {
@@ -470,18 +481,19 @@ mod tests {
             ("59:59", 3599),
             ("60:00", 3600),
             ("3600", 3600),
+            ("3601", 3601),
+            ("60:01", 3601),
+            ("18446744073709551615", u64::MAX),
         ] {
             assert_eq!(parse_duration(input).unwrap(), expected, "{input}");
         }
         for input in [
             "0",
-            "3601",
             "-1",
             "1.5",
             "abc",
             "",
             "0:00",
-            "60:01",
             "1:60",
             "1:5",
             ":30",

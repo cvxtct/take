@@ -1,5 +1,6 @@
 mod capture;
 mod clips;
+mod recording_policy;
 
 use capture::{AppInfo, Event};
 use objc2::{
@@ -21,7 +22,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         mpsc,
     },
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 #[link(name = "CoreGraphics", kind = "framework")]
@@ -107,7 +108,6 @@ struct State {
     stop: Arc<AtomicBool>,
     tx: mpsc::Sender<Event>,
     rx: mpsc::Receiver<Event>,
-    deadline: Option<Instant>,
     started: Option<Instant>,
     saved: Option<PathBuf>,
 }
@@ -123,7 +123,6 @@ impl Default for State {
             stop: Arc::new(AtomicBool::new(false)),
             tx,
             rx,
-            deadline: None,
             started: None,
             saved: None,
         }
@@ -194,6 +193,8 @@ define_class!(
             self.sync_controls();
             std::thread::spawn(move || capture::list_apps(tx));
         }
+        #[unsafe(method(selectSource:))]
+        fn select_source(&self, _sender: &AnyObject) { self.sync_controls(); }
         #[unsafe(method(toggleDuration:))]
         fn toggle_duration(&self, _sender: &AnyObject) { self.sync_controls(); }
         #[unsafe(method(preset:))]
@@ -211,11 +212,11 @@ define_class!(
                 c.record.setEnabled(false);
                 return;
             }
-            let duration = match capture::recording_duration(&c.seconds.stringValue().to_string(), c.unlimited.state() == NSControlStateValueOn) {
+            let Some(app) = state.apps.get(c.apps.indexOfSelectedItem() as usize).cloned() else { return; };
+            let duration = match capture::recording_duration(&app.bundle, &c.seconds.stringValue().to_string(), c.unlimited.state() == NSControlStateValueOn) {
                 Ok(duration) => duration,
                 Err(error) => { drop(state); self.status(&error); return; }
             };
-            let Some(app) = state.apps.get(c.apps.indexOfSelectedItem() as usize).cloned() else { return; };
             let folder = c.folder.stringValue().to_string();
             if folder.trim().is_empty() { drop(state); self.status("Enter a save folder first."); return; }
             state.busy = true; state.saved = None;
@@ -302,7 +303,14 @@ impl Delegate {
         let state = self.ivars().state.borrow();
         c.apps.setEnabled(!state.busy);
         c.refresh.setEnabled(!state.busy);
-        c.unlimited.setEnabled(!state.busy);
+        let selected = state.apps.get(c.apps.indexOfSelectedItem() as usize);
+        let limited = selected.is_some_and(|app| recording_policy::browser_limited(&app.bundle));
+        c.unlimited.setHidden(limited);
+        c.unlimited
+            .setEnabled(!state.busy && selected.is_some() && !limited);
+        if limited {
+            c.unlimited.setState(NSControlStateValueOff);
+        }
         c.folder.setEnabled(!state.busy);
         let timed = !state.busy && c.unlimited.state() != NSControlStateValueOn;
         c.seconds.setEnabled(timed);
@@ -312,7 +320,7 @@ impl Delegate {
         c.record
             .setTitle(&text(if state.busy { "Stop & Save" } else { "Record" }));
         c.record
-            .setEnabled(state.recording || (!state.busy && !state.apps.is_empty()));
+            .setEnabled(state.recording || (!state.busy && selected.is_some()));
         c.play.setEnabled(state.saved.is_some() && !state.busy);
         c.reveal.setEnabled(state.saved.is_some() && !state.busy);
         c.filename.setEnabled(state.saved.is_some() && !state.busy);
@@ -359,10 +367,9 @@ impl Delegate {
                         "Choose the browser playing your music."
                     });
                 }
-                Event::Started(duration) => {
+                Event::Started => {
                     state.recording = true;
                     state.started = Some(Instant::now());
-                    state.deadline = duration.map(|s| Instant::now() + Duration::from_secs(s));
                     self.status("Recording — play the excerpt in your browser.");
                 }
                 Event::Level(peak) => {
@@ -385,14 +392,12 @@ impl Delegate {
                     state.busy = false;
                     state.recording = false;
                     state.started = None;
-                    state.deadline = None;
                 }
                 Event::Error(error) => {
                     self.status(&error);
                     state.busy = false;
                     state.recording = false;
                     state.started = None;
-                    state.deadline = None;
                     // Keep an error visible rather than quitting and hiding a failed save.
                     state.closing = false;
                 }
@@ -585,7 +590,16 @@ impl Delegate {
         let view: &NSView = &canvas;
         let title = self.label(view, "TAKE", rect(26., 614., 330., 24.), false);
         title.setFont(Some(&NSFont::boldSystemFontOfSize(14.)));
-        self.label(view, "Capture audio.", rect(365., 614., 300., 20.), true);
+        self.label(
+            view,
+            if recording_policy::EXTENDED_RECORDING {
+                "Extended recording"
+            } else {
+                "Browser clips · up to 60s"
+            },
+            rect(365., 614., 300., 20.),
+            true,
+        );
         let record = self.button(view, "Record", sel!(record:), rect(816., 603., 180., 42.));
         record.setKeyEquivalent(&text("\r"));
         record.setBezelColor(Some(&ink(0.94, 0.19, 0.10)));
@@ -600,6 +614,13 @@ impl Delegate {
             rect(40., 409., 320., 30.),
             false,
         );
+        // SAFETY (#31): selectSource: is a main-thread Delegate method taking one
+        // object argument; this delegate outlives the retained popup control.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
+        unsafe {
+            apps.setTarget(Some(self));
+            apps.setAction(Some(sel!(selectSource:)));
+        }
         apps.addItemWithTitle(&text("Choose an app"));
         view.addSubview(&apps);
         let refresh = self.button(view, "Refresh", sel!(refresh:), rect(370., 407., 110., 32.));
