@@ -58,25 +58,15 @@ pub fn rename_clip(source: &Path, name: &str) -> io::Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{
-        fs,
-        sync::atomic::{AtomicU64, Ordering},
-    };
+    use std::fs;
 
-    struct RecordingDir(PathBuf);
+    struct RecordingDir(tempfile::TempDir);
     impl RecordingDir {
         fn new() -> Self {
-            static NEXT: AtomicU64 = AtomicU64::new(0);
-            let path = std::env::temp_dir().join(format!(
-                "take-rename-{}-{}",
-                std::process::id(),
-                NEXT.fetch_add(1, Ordering::Relaxed)
-            ));
-            fs::create_dir(&path).unwrap();
-            Self(path)
+            Self(tempfile::tempdir().unwrap())
         }
         fn recording(&self, name: &str) -> PathBuf {
-            let path = self.0.join(name);
+            let path = self.0.path().join(name);
             let spec = hound::WavSpec {
                 channels: 1,
                 sample_rate: 48000,
@@ -89,18 +79,12 @@ mod tests {
             path
         }
     }
-    impl Drop for RecordingDir {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
-        }
-    }
-
     #[test]
     fn renames_recording_preserving_audio_and_wav_extension() {
         let dir = RecordingDir::new();
         let source = dir.recording("Rhythm-123.wav");
         let renamed = rename_clip(&source, "Dub chord").unwrap();
-        assert_eq!(renamed, dir.0.join("Dub chord.wav"));
+        assert_eq!(renamed, dir.0.path().join("Dub chord.wav"));
         assert!(!source.exists());
         let mut audio = hound::WavReader::open(renamed).unwrap();
         assert_eq!(audio.samples::<i16>().next().unwrap().unwrap(), 1234);
@@ -109,7 +93,7 @@ mod tests {
     fn collision_preserves_both_recordings() {
         let dir = RecordingDir::new();
         let source = dir.recording("source.wav");
-        let existing = dir.0.join("existing.wav");
+        let existing = dir.0.path().join("existing.wav");
         fs::write(&existing, b"existing recording").unwrap();
         assert_eq!(
             rename_clip(&source, "existing").unwrap_err().kind(),
@@ -150,7 +134,7 @@ mod tests {
         let dir = RecordingDir::new();
         let source = dir.recording("source.wav");
         let renamed = rename_clip(&source, "  Mély akkord.WAV  ").unwrap();
-        assert_eq!(renamed, dir.0.join("Mély akkord.wav"));
+        assert_eq!(renamed, dir.0.path().join("Mély akkord.wav"));
         assert_eq!(rename_clip(&renamed, "Mély akkord.wav").unwrap(), renamed);
         assert!(hound::WavReader::open(renamed).is_ok());
     }
@@ -158,12 +142,12 @@ mod tests {
     #[test]
     fn refuses_directories_and_symlinks_without_moving_them() {
         let dir = RecordingDir::new();
-        let folder = dir.0.join("folder.wav");
+        let folder = dir.0.path().join("folder.wav");
         fs::create_dir(&folder).unwrap();
         assert!(rename_clip(&folder, "moved").is_err());
         assert!(folder.is_dir());
         let source = dir.recording("source.wav");
-        let link = dir.0.join("link.wav");
+        let link = dir.0.path().join("link.wav");
         std::os::unix::fs::symlink(&source, &link).unwrap();
         assert!(rename_clip(&link, "moved").is_err());
         assert!(link.is_symlink());
@@ -173,16 +157,16 @@ mod tests {
     #[test]
     fn filesystem_failures_do_not_create_or_replace_files() {
         let dir = RecordingDir::new();
-        let missing = dir.0.join("missing.wav");
+        let missing = dir.0.path().join("missing.wav");
         assert_eq!(
             rename_clip(&missing, "new").unwrap_err().kind(),
             io::ErrorKind::NotFound
         );
-        assert!(!dir.0.join("new.wav").exists());
+        assert!(!dir.0.path().join("new.wav").exists());
         let source = dir.recording("source.wav");
         assert!(rename_clip(&source, &"x".repeat(300)).is_err());
         assert!(hound::WavReader::open(&source).is_ok());
-        let link = dir.0.join("occupied.wav");
+        let link = dir.0.path().join("occupied.wav");
         std::os::unix::fs::symlink(&missing, &link).unwrap();
         assert_eq!(
             rename_clip(&source, "occupied").unwrap_err().kind(),
