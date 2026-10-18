@@ -44,3 +44,8 @@ Dark two-panel AppKit interface with an elapsed timer, live peak-level history, 
 Start each change with a GitHub issue and a dedicated work branch from `main`.
 Submit a pull request linked to the issue. CI runs formatting, unit tests, and
 Clippy on macOS for pull requests and pushes to `main`. See `AGENTS.md`.
+
+## Credits
+
+- **[cvxtct](https://github.com/cvxtct)** — project concept, specification, creative direction, and hands-on testing.
+- **OpenAI Codex (AI coding assistant)** — implementation, native macOS UI development, automated tests, and development tooling, guided and reviewed by cvxtct.
