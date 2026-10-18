@@ -492,7 +492,7 @@ impl Delegate {
             w.setReleasedWhenClosed(false);
             w
         };
-        window.setTitle(&text("Browser Recorder"));
+        window.setTitle(&text("Take"));
         window.setAppearance(
             NSAppearance::appearanceNamed(unsafe { NSAppearanceNameDarkAqua }).as_deref(),
         );
@@ -503,14 +503,9 @@ impl Delegate {
         };
         window.setContentView(Some(&canvas));
         let view: &NSView = &canvas;
-        let title = self.label(view, "BROWSER RECORDER", rect(26., 614., 330., 24.), false);
+        let title = self.label(view, "TAKE", rect(26., 614., 330., 24.), false);
         title.setFont(Some(&NSFont::boldSystemFontOfSize(14.)));
-        self.label(
-            view,
-            "CAPTURE / LISTEN / KEEP",
-            rect(365., 614., 300., 20.),
-            true,
-        );
+        self.label(view, "Capture audio.", rect(365., 614., 300., 20.), true);
         let record = self.button(view, "Record", sel!(record:), rect(816., 603., 180., 42.));
         record.setKeyEquivalent(&text("\r"));
         record.setBezelColor(Some(&ink(0.94, 0.19, 0.10)));
@@ -649,7 +644,7 @@ impl Delegate {
         let quit = unsafe {
             NSMenuItem::initWithTitle_action_keyEquivalent(
                 NSMenuItem::alloc(mtm),
-                &text("Quit Browser Recorder"),
+                &text("Quit Take"),
                 Some(sel!(terminate:)),
                 &text("q"),
             )

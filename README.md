@@ -1,13 +1,15 @@
-# Browser Recorder (Rust)
+# Take
+
+Capture audio.
 
 A small macOS desktop recorder for browser audio excerpts. Native AppKit controls written in Rust (system fonts, menus and keyboard shortcuts), direct Objective-C bindings to Apple's ScreenCaptureKit, and local WAV encoding (hound). No Swift bridge, browser extension, virtual audio driver, analytics, or application network requests. Cargo downloads open-source dependencies at build time; versions are pinned in Cargo.lock.
 
 ## Run
 
-Open **Browser Recorder.app** in this folder.
+Open **Take.app** in this folder.
 
 1. Open the browser and music you want to record.
-2. Click **Refresh apps**. Allow capture when macOS requests it. If needed, enable Browser Recorder in System Settings → Privacy & Security → Screen & System Audio Recording, then quit and reopen the app.
+2. Click **Refresh apps**. Allow capture when macOS requests it. If needed, enable Take in System Settings → Privacy & Security → Screen & System Audio Recording, then quit and reopen the app.
 3. Select your browser. Capture is application-wide: pause other tabs in that browser.
 4. Set a duration as minutes:seconds (e.g. `7:55`) or whole seconds (e.g. `475`), from `0:01` to `60:00`, or enable **Until I stop** to record without a timer. Choose a save folder. Default: `recordings` beside the app.
 5. Click **Record**, then play the excerpt. An elapsed timer and live level history show progress.
@@ -27,7 +29,7 @@ Requires macOS 13+, Rust and Apple's command line tools.
 cargo test --locked
 cargo clippy --locked -- -D warnings
 zsh build.sh
-open "Browser Recorder.app"
+open "Take.app"
 ```
 
 `src/main.rs`: GUI and worker lifecycle.
@@ -49,3 +51,5 @@ Clippy on macOS for pull requests and pushes to `main`. See `AGENTS.md`.
 
 - **[cvxtct](https://github.com/cvxtct)** — project concept, specification, creative direction, and hands-on testing.
 - **OpenAI Codex (AI coding assistant)** — implementation, native macOS UI development, automated tests, and development tooling, guided and reviewed by cvxtct.
+
+The macOS bundle identifier remains `local.muzik.browserrecorder` for continuity with existing installations. The build script migrates `Browser Recorder.app` to `Take.app`; recordings stay in the same folder.

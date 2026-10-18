@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "browser-recorder"
+name = "take"
 version = "0.1.0"
 dependencies = [
  "block2",
