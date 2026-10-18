@@ -1,0 +1,4 @@
+# Audit the locked dependency graph for known RustSec vulnerabilities.
+# Do not silently suppress advisories; any exception needs issue-linked review.
+[advisories]
+ignore = []
