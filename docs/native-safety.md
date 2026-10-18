@@ -49,3 +49,12 @@ The current-exe rule also flags the default recording folder. This call only
 suggests an editable output path beside the app; it is not an identity or trust
 check and never loads or executes code. Files are created with create_new under
 the user's existing privileges. This one call has a rule-specific exception.
+
+## Exclusive recording rename (issue #4)
+
+`clips::rename_clip` calls macOS `renamex_np` with `RENAME_EXCL` (0x00000004,
+from the SDK's `sys/stdio.h`). The filesystem rejects an existing destination
+atomically; no check-then-overwrite fallback is used. CString storage remains
+alive throughout the synchronous C call, and OS errors are returned to the UI.
+Names cannot contain path separators or control characters. Source files must
+be regular files; directories and symlinks are rejected before the operation.
