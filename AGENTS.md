@@ -17,3 +17,20 @@ Live capture checks require macOS capture permission; unit tests do not.
 Keep recordings, built app bundles, backups, and target output out of Git.
 Keep one launchable installed app; archive backup bundles to avoid duplicate
 Spotlight entries and ambiguous capture permission entries.
+
+## Agent skills
+
+### Issue tracker
+
+Use GitHub Issues in `cvxtct/take`.
+See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the five default triage labels when helpful.
+See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Use one root `GLOSSARY.md` and `docs/adr/`.
+See `docs/agents/domain.md`.
